@@ -282,6 +282,9 @@ handle_event_(_State, _, force_flush, Data) ->
 
 handle_event_(_State, {timeout, check_table_size}, check_table_size, #data{max_queue_size=infinity}) ->
     keep_state_and_data;
+handle_event_(_State, {timeout, check_table_size}, check_table_size, #data{exporter=undefined,
+                                                                           check_table_size_ms=CheckInterval}) ->
+    {keep_state_and_data, [{{timeout, check_table_size}, CheckInterval, check_table_size}]};
 handle_event_(_State, {timeout, check_table_size}, check_table_size, #data{max_queue_size=MaxQueueSize,
                                                                            check_table_size_ms=CheckInterval,
                                                                            reg_name=RegName}) ->
