@@ -11,6 +11,7 @@
 all() ->
     [exporting_timeout_test,
      check_table_size_test,
+     no_exporter_stays_disabled_test,
      exporting_runner_timeout_test].
 
 %% verifies that after the runner has to be killed for taking too long
@@ -60,6 +61,17 @@ check_table_size_test(_Config) ->
     %% force_flush is async, have to wait for some long enough time again,
     timer:sleep(CheckTableSizeMs * 10),
     true = otel_batch_processor:on_end(generate_span(), #{reg_name => RegName}).
+
+no_exporter_stays_disabled_test(_Config) ->
+    CheckTableSizeMs = 1,
+    {ok, _Pid, #{reg_name := RegName}} = otel_batch_processor:start_link(
+                                           #{name => test_processor_no_exporter,
+                                             resource => otel_resource:create([]),
+                                             exporter => none,
+                                             scheduled_delay_ms => timer:minutes(10),
+                                             check_table_size_ms => CheckTableSizeMs}),
+    timer:sleep(CheckTableSizeMs * 10),
+    dropped = otel_batch_processor:on_end(generate_span(), #{reg_name => RegName}).
 
 exporting_runner_timeout_test(_Config) ->
     process_flag(trap_exit, true),
