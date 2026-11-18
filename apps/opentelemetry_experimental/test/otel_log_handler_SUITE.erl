@@ -2,10 +2,18 @@
 
 -compile(export_all).
 
+%% Logger permits handler-specific config keys not represented in its closed type.
+-eqwalizer({nowarn_function, exports_logs_after_idle_interval/1}).
+-eqwalizer({nowarn_function, force_flush_exports_buffered_logs/1}).
+-eqwalizer({nowarn_function, force_flush_with_empty_batch/1}).
+
 -include_lib("common_test/include/ct.hrl").
 
 all() ->
-    [exports_logs_after_idle_interval].
+    [exports_logs_after_idle_interval,
+     force_flush_exports_buffered_logs,
+     force_flush_with_empty_batch,
+     force_flush_unknown_handler].
 
 init_per_suite(Config) ->
     {ok, _} = application:ensure_all_started(opentelemetry_experimental),
@@ -50,6 +58,52 @@ exports_logs_after_idle_interval(_Config) ->
     after
         _ = logger:remove_handler(HandlerId)
     end.
+
+force_flush_exports_buffered_logs(_Config) ->
+    HandlerId = ?FUNCTION_NAME,
+    ok = logger:add_handler(HandlerId, otel_log_handler,
+                            #{level => info,
+                              exporter => {?MODULE, {logs, self()}},
+                              scheduled_delay_ms => timer:hours(1)}),
+    try
+        logger:log(info, "flushed log line", #{}),
+        ok = otel_log_handler:force_flush(HandlerId),
+        receive
+            {logs, {Batch, _}} ->
+                [[#{msg := {string, "flushed log line"}}]] = maps:values(Batch)
+        after
+            0 -> ct:fail(force_flush_returned_before_export)
+        end,
+        ok = otel_log_handler:force_flush(HandlerId),
+        receive
+            {logs, _} -> ct:fail(exported_same_batch_twice)
+        after
+            0 -> ok
+        end
+    after
+        _ = logger:remove_handler(HandlerId)
+    end.
+
+force_flush_with_empty_batch(_Config) ->
+    HandlerId = ?FUNCTION_NAME,
+    ok = logger:add_handler(HandlerId, otel_log_handler,
+                            #{level => info,
+                              exporter => {?MODULE, {logs, self()}},
+                              scheduled_delay_ms => timer:hours(1)}),
+    try
+        ok = otel_log_handler:force_flush(HandlerId),
+        receive
+            {logs, _} -> ct:fail(exported_empty_batch)
+        after
+            0 -> ok
+        end
+    after
+        _ = logger:remove_handler(HandlerId)
+    end.
+
+force_flush_unknown_handler(_Config) ->
+    {error, {not_found, no_such_handler}} = otel_log_handler:force_flush(no_such_handler),
+    {error, {not_otel_log_handler, logger_std_h}} = otel_log_handler:force_flush(default).
 
 flush() ->
     receive
