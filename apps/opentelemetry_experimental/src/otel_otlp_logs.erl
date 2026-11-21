@@ -81,7 +81,10 @@ log_record(#{level := Level,
                 M ->
                     M
             end,
-    Attributes = maps:without([gl, time, report_cb], Metadata),
+    Attributes = code_attributes(Metadata,
+                                 maps:without([gl, time, report_cb, mfa, file, line,
+                                               otel_trace_id, otel_span_id, otel_trace_flags],
+                                              Metadata)),
     Attributes1 = maps:fold(fun(K, V, Acc) ->
                                     [#{key => otel_otlp_common:to_binary(K),
                                        value => otel_otlp_common:to_any_value(V)} | Acc]
@@ -114,6 +117,29 @@ log_record(#{level := Level,
                dropped_attributes_count => DroppedAttributesCount,
                flags                   => Flags
               }.
+
+code_attributes(Metadata, Attributes) ->
+    lists:foldl(fun(Key, Acc) -> code_attribute(Key, Metadata, Acc) end,
+                Attributes, [mfa, file, line]).
+
+code_attribute(mfa, #{mfa := {Module, Function, Arity}}, Acc)
+  when is_atom(Module), is_atom(Function), is_integer(Arity) ->
+    Acc#{'code.function.name' =>
+             unicode:characters_to_binary(io_lib:format("~ts:~ts/~b", [Module, Function, Arity]))};
+code_attribute(file, #{file := File}, Acc) ->
+    try unicode:characters_to_binary(File) of
+        Path when is_binary(Path) ->
+            Acc#{'code.file.path' => Path};
+        _ ->
+            Acc
+    catch
+        _:_ ->
+            Acc
+    end;
+code_attribute(line, #{line := Line}, Acc) when is_integer(Line) ->
+    Acc#{'code.line.number' => Line};
+code_attribute(_, _, Acc) ->
+    Acc.
 
 %% Decode a trace or span id from logger metadata into the raw bytes the
 %% OTLP LogRecord expects. The metadata value is a lowercase hex encoded
