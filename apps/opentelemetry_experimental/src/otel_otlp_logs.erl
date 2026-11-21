@@ -90,7 +90,6 @@ log_record(#{level := Level,
                                        value => otel_otlp_common:to_any_value(V)} | Acc]
                             end, [], Attributes),
     DroppedAttributesCount = maps:size(Attributes) - length(Attributes1),
-    Flags = 0,
 
     %% Note: otel_trace_id and otel_span_id from hex_span_ctx are now binaries, not charlists.
     %% They are hex encoded, but the OTLP trace_id and span_id fields are the
@@ -115,7 +114,7 @@ log_record(#{level := Level,
                body                    => otel_otlp_common:to_any_value(Body1),
                attributes              => Attributes1,
                dropped_attributes_count => DroppedAttributesCount,
-               flags                   => Flags
+               flags                   => maps:get(flags, LogRecord, 0)
               }.
 
 code_attributes(Metadata, Attributes) ->
@@ -147,7 +146,7 @@ code_attribute(_, _, Acc) ->
 %% in older versions of the API) but raw ids are also accepted in case
 %% the user set the metadata themselves.
 %% Decode both correlation ids together: either both are valid and the
-%% correlation fields are returned (trace_flags added only when the
+%% correlation fields are returned (flags added only when the
 %% metadata carried it), or all correlation fields are omitted.
 correlation_fields(MetaTraceId, MetaSpanId, TraceFlagsHex) ->
     case {decode_id(MetaTraceId, 16), decode_id(MetaSpanId, 8)} of
@@ -158,7 +157,7 @@ correlation_fields(MetaTraceId, MetaSpanId, TraceFlagsHex) ->
                 undefined ->
                     Base;
                 TraceFlags ->
-                    Base#{trace_flags => TraceFlags}
+                    Base#{flags => TraceFlags}
             end;
         _ ->
             #{}
