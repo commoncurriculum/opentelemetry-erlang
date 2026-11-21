@@ -68,7 +68,7 @@ log_record(#{level := Level,
              msg := Body,
              meta := Metadata=#{time := ObservedTime}}, Config) ->
     Time = opentelemetry:timestamp(),
-    {SeverityNumber, SeverityText} = level_to_severity(Level),
+    SeverityNumber = level_to_severity(Level),
     Body1 = case format_msg(Body, Metadata, Config) of
                 S when ?IS_STRING(S) ->
                     %% if body is a string, make it a single line
@@ -110,7 +110,7 @@ log_record(#{level := Level,
     LogRecord#{time_unix_nano          => opentelemetry:timestamp_to_nano(Time),
                observed_time_unix_nano => erlang:convert_time_unit(ObservedTime, microsecond, nanosecond),
                severity_number         => SeverityNumber,
-               severity_text           => SeverityText,
+               severity_text           => atom_to_binary(Level, utf8),
                body                    => otel_otlp_common:to_any_value(Body1),
                attributes              => Attributes1,
                dropped_attributes_count => DroppedAttributesCount,
@@ -179,7 +179,7 @@ decode_trace_flags(TraceFlagsHex) when is_binary(TraceFlagsHex),
 decode_trace_flags(_) ->
     0.
 
--spec decode_id(term(), pos_integer()) -> {ok, binary()} | error.
+-spec decode_id(dynamic(), pos_integer()) -> {ok, binary()} | error.
 decode_id(Id, NumBytes) when is_list(Id) ->
     %% logger metadata is arbitrary user data: characters_to_binary/1
     %% raises badarg for non-chardata lists (improper lists, atoms in
@@ -330,18 +330,18 @@ chardata_to_list(Chardata) ->
     end.
 
 level_to_severity(emergency)->
-    {'SEVERITY_NUMBER_FATAL', <<"SEVERITY_NUMBER_FATAL">>};
+    'SEVERITY_NUMBER_FATAL';
 level_to_severity(alert)->
-    {'SEVERITY_NUMBER_ERROR3', <<"SEVERITY_NUMBER_ERROR3">>};
+    'SEVERITY_NUMBER_ERROR3';
 level_to_severity(critical)->
-    {'SEVERITY_NUMBER_ERROR2', <<"SEVERITY_NUMBER_ERROR2">>};
+    'SEVERITY_NUMBER_ERROR2';
 level_to_severity(error)->
-    {'SEVERITY_NUMBER_ERROR', <<"SEVERITY_NUMBER_ERROR">>};
+    'SEVERITY_NUMBER_ERROR';
 level_to_severity(warning)->
-    {'SEVERITY_NUMBER_WARN', <<"SEVERITY_NUMBER_WARN">>};
+    'SEVERITY_NUMBER_WARN';
 level_to_severity(notice)->
-    {'SEVERITY_NUMBER_INFO2', <<"SEVERITY_NUMBER_INFO2">>};
+    'SEVERITY_NUMBER_INFO2';
 level_to_severity(info)->
-    {'SEVERITY_NUMBER_INFO', <<"SEVERITY_NUMBER_INFO">>};
+    'SEVERITY_NUMBER_INFO';
 level_to_severity(debug)->
-    {'SEVERITY_NUMBER_DEBUG', <<"SEVERITY_NUMBER_DEBUG">>}.
+    'SEVERITY_NUMBER_DEBUG'.
