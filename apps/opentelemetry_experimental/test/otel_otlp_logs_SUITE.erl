@@ -26,7 +26,8 @@ all() ->
      non_hex_trace_flags_default_to_zero,
      code_location_as_semconv_attributes,
      span_ctx_metadata_not_attributes,
-     non_chardata_file_dropped].
+     non_chardata_file_dropped,
+     severity_text_is_the_logger_level].
 
 %% ids set by `otel_span:hex_span_ctx/1' are lowercase hex binaries and
 %% must be decoded to the raw bytes the OTLP LogRecord expects
@@ -120,14 +121,30 @@ non_chardata_file_dropped(_Config) ->
     LogRecord = export_log_record(#{file => [an_atom]}),
     ?assertEqual(#{}, attributes(LogRecord)).
 
+severity_text_is_the_logger_level(_Config) ->
+    Expected = [{emergency, 'SEVERITY_NUMBER_FATAL', <<"emergency">>},
+                {alert, 'SEVERITY_NUMBER_ERROR3', <<"alert">>},
+                {critical, 'SEVERITY_NUMBER_ERROR2', <<"critical">>},
+                {error, 'SEVERITY_NUMBER_ERROR', <<"error">>},
+                {warning, 'SEVERITY_NUMBER_WARN', <<"warning">>},
+                {notice, 'SEVERITY_NUMBER_INFO2', <<"notice">>},
+                {info, 'SEVERITY_NUMBER_INFO', <<"info">>},
+                {debug, 'SEVERITY_NUMBER_DEBUG', <<"debug">>}],
+    [?assertMatch(#{severity_number := Number, severity_text := Text},
+                  export_log_record(Level, #{}))
+     || {Level, Number, Text} <- Expected].
+
 %%
 
 attributes(#{attributes := Attributes}) ->
     maps:from_list([{Key, Value} || #{key := Key, value := #{value := Value}} <- Attributes]).
 
 export_log_record(SpanCtxMetadata) ->
+    export_log_record(info, SpanCtxMetadata).
+
+export_log_record(Level, SpanCtxMetadata) ->
     Metadata = SpanCtxMetadata#{time => erlang:system_time(microsecond)},
-    LogEvent = #{level => info,
+    LogEvent = #{level => Level,
                  msg => {string, "hello"},
                  meta => Metadata},
     Scope = #instrumentation_scope{name = <<"test_scope">>,
