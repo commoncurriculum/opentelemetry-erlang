@@ -23,7 +23,10 @@ all() ->
      partially_invalid_ids_dropped,
      no_span_ctx_metadata,
      non_chardata_list_ids_dropped,
-     non_hex_trace_flags_default_to_zero].
+     non_hex_trace_flags_default_to_zero,
+     code_location_as_semconv_attributes,
+     span_ctx_metadata_not_attributes,
+     non_chardata_file_dropped].
 
 %% ids set by `otel_span:hex_span_ctx/1' are lowercase hex binaries and
 %% must be decoded to the raw bytes the OTLP LogRecord expects
@@ -98,7 +101,29 @@ no_span_ctx_metadata(_Config) ->
                    severity_number := 'SEVERITY_NUMBER_INFO',
                    time_unix_nano := _}, LogRecord).
 
+code_location_as_semconv_attributes(_Config) ->
+    LogRecord = export_log_record(#{mfa => {'Elixir.Oban.Telemetry', log, 2},
+                                    file => "lib/oban/telemetry.ex",
+                                    line => 681}),
+    ?assertEqual(#{<<"code.function.name">> => {string_value, <<"Elixir.Oban.Telemetry:log/2">>},
+                   <<"code.file.path">> => {string_value, <<"lib/oban/telemetry.ex">>},
+                   <<"code.line.number">> => {int_value, 681}},
+                 attributes(LogRecord)).
+
+span_ctx_metadata_not_attributes(_Config) ->
+    LogRecord = export_log_record(#{otel_trace_id => ?HEX_TRACE_ID,
+                                    otel_span_id => ?HEX_SPAN_ID,
+                                    otel_trace_flags => <<"01">>}),
+    ?assertEqual(#{}, attributes(LogRecord)).
+
+non_chardata_file_dropped(_Config) ->
+    LogRecord = export_log_record(#{file => [an_atom]}),
+    ?assertEqual(#{}, attributes(LogRecord)).
+
 %%
+
+attributes(#{attributes := Attributes}) ->
+    maps:from_list([{Key, Value} || #{key := Key, value := #{value := Value}} <- Attributes]).
 
 export_log_record(SpanCtxMetadata) ->
     Metadata = SpanCtxMetadata#{time => erlang:system_time(microsecond)},
